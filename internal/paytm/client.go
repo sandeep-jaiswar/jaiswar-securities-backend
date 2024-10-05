@@ -3,9 +3,15 @@ package paytm
 import (
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
+)
+
+var (
+	clientInstance *PaytmMoneyClient
+	once           sync.Once
 )
 
 type PaytmMoneyClient struct {
@@ -16,15 +22,18 @@ type PaytmMoneyClient struct {
 	Logger     *zap.Logger
 }
 
-// NewPaytmMoneyClient initializes a new PaytmMoneyClient instance.
 func NewPaytmMoneyClient(apiKey, secretKey string, logger *zap.Logger) *PaytmMoneyClient {
-	return &PaytmMoneyClient{
-		BaseURL: os.Getenv("PaytmLoginBaseUrl"),
-		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
-		ApiKey:    apiKey,
-		SecretKey: secretKey,
-		Logger:    logger,
-	}
+	once.Do(func() {
+		clientInstance = &PaytmMoneyClient{
+			BaseURL: os.Getenv("PAYTM_LOGIN_BASE_URL"),
+			HTTPClient: &http.Client{
+				Timeout: 10 * time.Second,
+			},
+			ApiKey:    os.Getenv("PAYTM_API_KEY"),
+			SecretKey: os.Getenv("PAYTM_SECRET_KEY"),
+			Logger:    logger,
+		}
+	})
+
+	return clientInstance
 }
