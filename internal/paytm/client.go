@@ -22,7 +22,7 @@ type PaytmMoneyClient struct {
 	Logger     *zap.Logger
 }
 
-func NewPaytmMoneyClient(apiKey, secretKey string, logger *zap.Logger) *PaytmMoneyClient {
+func NewPaytmMoneyClient(logger *zap.Logger) *PaytmMoneyClient {
 	once.Do(func() {
 		clientInstance = &PaytmMoneyClient{
 			BaseURL: os.Getenv("PAYTM_LOGIN_BASE_URL"),

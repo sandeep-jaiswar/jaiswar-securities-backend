@@ -2,8 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,21 +23,24 @@ type Server struct {
 	sessionManager *session.SessionManager
 	httpServer     *http.Server
 	paytmClient    *paytm.PaytmMoneyClient
+	sessionClient  *session.SessionManager
 }
 
 type Handlers struct {
 	logger         *zap.Logger
 	sessionManager *session.SessionManager
 	paytmClient    *paytm.PaytmMoneyClient
+	sessionClient  *session.SessionManager
 }
 
-func NewServer(logger *zap.Logger, port string, paytmClient *paytm.PaytmMoneyClient) *Server {
+func NewServer(logger *zap.Logger, port string, paytmClient *paytm.PaytmMoneyClient, sessionClient *session.SessionManager) *Server {
 	router := mux.NewRouter()
 	sessionManager := session.NewSessionManager()
 	handlers := &Handlers{
 		logger:         logger,
 		sessionManager: sessionManager,
 		paytmClient:    paytmClient,
+		sessionClient:  sessionClient,
 	}
 
 	httpServer := &http.Server{
@@ -51,6 +55,7 @@ func NewServer(logger *zap.Logger, port string, paytmClient *paytm.PaytmMoneyCli
 		sessionManager: sessionManager,
 		httpServer:     httpServer,
 		paytmClient:    paytmClient,
+		sessionClient:  sessionClient,
 	}
 	s.InitializeRoutes()
 	return s
@@ -128,7 +133,7 @@ func (h *Handlers) TokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read the response body
-	responseBody, err := ioutil.ReadAll(accessTokenResponse.Body)
+	responseBody, err := io.ReadAll(accessTokenResponse.Body)
 	if err != nil {
 		h.logger.Error("Failed to read response body", zap.Error(err))
 		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
@@ -136,6 +141,29 @@ func (h *Handlers) TokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer accessTokenResponse.Body.Close()
 
+	var tokenResponse map[string]string
+	err = json.Unmarshal(responseBody, &tokenResponse)
+	if err != nil {
+		h.logger.Error("Failed to unmarshal token response", zap.Error(err))
+		http.Error(w, "Failed to unmarshal token response", http.StatusInternalServerError)
+		return
+	}
+	merchantID, ok := tokenResponse["merchant_id"]
+	if !ok {
+		h.logger.Error("Merchant ID not found in token response")
+		http.Error(w, "Merchant ID not found in token response", http.StatusBadRequest)
+		return
+	}
+	h.sessionClient.SetKey("merchant_id", merchantID)
+
+	publicAccessToken, ok := tokenResponse["public_access_token"]
+	if !ok {
+		h.logger.Error("public_access_token not found in token response")
+		http.Error(w, "public_access_token not found in token response", http.StatusBadRequest)
+		return
+	}
+	h.sessionClient.SetKey("public_access_token", publicAccessToken)
+
 	// Log the response body
-	h.logger.Info("Access token response received", zap.String("response_data", string(responseBody)))
+	h.logger.Info("Access token response received", zap.String("response_data", publicAccessToken))
 }

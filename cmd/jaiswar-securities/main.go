@@ -6,6 +6,7 @@ import (
 	"github.com/sandeep-jaiswar/jaiswar-securities/internal/config"
 	"github.com/sandeep-jaiswar/jaiswar-securities/internal/paytm"
 	"github.com/sandeep-jaiswar/jaiswar-securities/internal/server"
+	"github.com/sandeep-jaiswar/jaiswar-securities/internal/session"
 	"github.com/sandeep-jaiswar/jaiswar-securities/pkg"
 	"go.uber.org/zap"
 )
@@ -24,9 +25,9 @@ func main() {
 		logger.Fatal("Application encountered an error", zap.Error(err))
 	}
 
-	paytmClient := paytm.NewPaytmMoneyClient(appConfig.PaytmApiKey, appConfig.PaytmSecretKey, logger)
-
-	srv := server.NewServer(logger, appConfig.Port, paytmClient)
+	paytmClient := paytm.NewPaytmMoneyClient(logger)
+	sessionClient := session.NewSessionManager()
+	srv := server.NewServer(logger, appConfig.Port, paytmClient, sessionClient)
 	srv.Start()
 }
 

@@ -15,20 +15,20 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
-func (sm *SessionManager) StoreToken(userID, token string) {
+func (sm *SessionManager) SetKey(userID, token string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.tokens[userID] = token
 }
 
-func (sm *SessionManager) GetToken(userID string) (string, bool) {
+func (sm *SessionManager) GetKey(userID string) (string, bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	token, exists := sm.tokens[userID]
 	return token, exists
 }
 
-func (sm *SessionManager) DeleteToken(userID string) {
+func (sm *SessionManager) DeleteKey(userID string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	delete(sm.tokens, userID)
