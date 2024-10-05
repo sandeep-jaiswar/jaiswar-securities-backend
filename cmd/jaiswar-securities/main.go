@@ -3,11 +3,14 @@ package main
 import (
 	"log"
 
+	"github.com/sandeep-jaiswar/jaiswar-securities/internal/config"
+	"github.com/sandeep-jaiswar/jaiswar-securities/internal/server"
 	"github.com/sandeep-jaiswar/jaiswar-securities/pkg"
 	"go.uber.org/zap"
 )
 
 func main() {
+	appConfig := config.LoadConfig()
 	logger, err := pkg.InitializeLogger()
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
@@ -19,6 +22,9 @@ func main() {
 	if err := run(); err != nil {
 		logger.Fatal("Application encountered an error", zap.Error(err))
 	}
+
+	srv := server.NewServer(logger, appConfig.Port)
+	srv.Start()
 }
 
 func run() error {

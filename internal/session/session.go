@@ -4,23 +4,32 @@ import (
 	"sync"
 )
 
-type Session struct {
-	mu    sync.RWMutex
-	token string
+type SessionManager struct {
+	tokens map[string]string
+	mu     sync.Mutex
 }
 
-func NewSession() *Session {
-	return &Session{}
+func NewSessionManager() *SessionManager {
+	return &SessionManager{
+		tokens: make(map[string]string),
+	}
 }
 
-func (s *Session) SetToken(token string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.token = token
+func (sm *SessionManager) StoreToken(userID, token string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.tokens[userID] = token
 }
 
-func (s *Session) GetToken() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.token
+func (sm *SessionManager) GetToken(userID string) (string, bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	token, exists := sm.tokens[userID]
+	return token, exists
+}
+
+func (sm *SessionManager) DeleteToken(userID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	delete(sm.tokens, userID)
 }
