@@ -2,15 +2,18 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
 	"github.com/gorilla/mux"
-	"go.uber.org/zap"
+	"github.com/sandeep-jaiswar/jaiswar-securities/internal/paytm"
 	"github.com/sandeep-jaiswar/jaiswar-securities/internal/session"
+	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -19,19 +22,25 @@ type Server struct {
 	handlers       *Handlers
 	sessionManager *session.SessionManager
 	httpServer     *http.Server
+	paytmClient    *paytm.PaytmMoneyClient
+	sessionClient  *session.SessionManager
 }
 
 type Handlers struct {
 	logger         *zap.Logger
 	sessionManager *session.SessionManager
+	paytmClient    *paytm.PaytmMoneyClient
+	sessionClient  *session.SessionManager
 }
 
-func NewServer(logger *zap.Logger, port string) *Server {
+func NewServer(logger *zap.Logger, port string, paytmClient *paytm.PaytmMoneyClient, sessionClient *session.SessionManager) *Server {
 	router := mux.NewRouter()
 	sessionManager := session.NewSessionManager()
 	handlers := &Handlers{
 		logger:         logger,
 		sessionManager: sessionManager,
+		paytmClient:    paytmClient,
+		sessionClient:  sessionClient,
 	}
 
 	httpServer := &http.Server{
@@ -45,6 +54,8 @@ func NewServer(logger *zap.Logger, port string) *Server {
 		handlers:       handlers,
 		sessionManager: sessionManager,
 		httpServer:     httpServer,
+		paytmClient:    paytmClient,
+		sessionClient:  sessionClient,
 	}
 	s.InitializeRoutes()
 	return s
@@ -84,16 +95,75 @@ func (s *Server) Shutdown() {
 
 func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Login handler called")
-	fmt.Fprintln(w, "Login endpoint")
+
+	stateKey := r.URL.Query().Get("stateKey")
+	if stateKey == "" {
+		h.logger.Error("State key is missing")
+		http.Error(w, "State key is required", http.StatusBadRequest)
+		return
+	}
+
+	loginURL, err := h.paytmClient.Login(stateKey)
+	if err != nil {
+		h.logger.Error("Error during Paytm login", zap.Error(err))
+		http.Error(w, "Failed to log in", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, loginURL, http.StatusFound)
 }
 
 func (h *Handlers) TokenHandler(w http.ResponseWriter, r *http.Request) {
-	token := "some_generated_token"
-	userID := "user123"
+	queryParams := r.URL.Query()
+	success := queryParams.Get("success")
+	requestToken := queryParams.Get("requestToken")
+	state := queryParams.Get("state")
 
-	h.logger.Info("Token handler called")
-	h.logger.Info("Storing token", zap.String("userID", userID), zap.String("token", token))
-	h.sessionManager.StoreToken(userID, token)
+	if success != "true" || requestToken == "" || state != "token" {
+		h.logger.Error("Invalid request parameters for token handler")
+		http.Error(w, "Invalid request parameters", http.StatusBadRequest)
+		return
+	}
 
-	fmt.Fprintf(w, "Token stored for user %s: %s", userID, token)
+	accessTokenResponse, err := h.paytmClient.GenerateAccessToken(requestToken)
+	if err != nil {
+		h.logger.Error("Error generating access token", zap.Error(err))
+		http.Error(w, "Failed to generate access token", http.StatusInternalServerError)
+		return
+	}
+
+	// Read the response body
+	responseBody, err := io.ReadAll(accessTokenResponse.Body)
+	if err != nil {
+		h.logger.Error("Failed to read response body", zap.Error(err))
+		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
+		return
+	}
+	defer accessTokenResponse.Body.Close()
+
+	var tokenResponse map[string]string
+	err = json.Unmarshal(responseBody, &tokenResponse)
+	if err != nil {
+		h.logger.Error("Failed to unmarshal token response", zap.Error(err))
+		http.Error(w, "Failed to unmarshal token response", http.StatusInternalServerError)
+		return
+	}
+	merchantID, ok := tokenResponse["merchant_id"]
+	if !ok {
+		h.logger.Error("Merchant ID not found in token response")
+		http.Error(w, "Merchant ID not found in token response", http.StatusBadRequest)
+		return
+	}
+	h.sessionClient.SetKey("merchant_id", merchantID)
+
+	publicAccessToken, ok := tokenResponse["public_access_token"]
+	if !ok {
+		h.logger.Error("public_access_token not found in token response")
+		http.Error(w, "public_access_token not found in token response", http.StatusBadRequest)
+		return
+	}
+	h.sessionClient.SetKey("public_access_token", publicAccessToken)
+
+	// Log the response body
+	h.logger.Info("Access token response received", zap.String("response_data", publicAccessToken))
 }

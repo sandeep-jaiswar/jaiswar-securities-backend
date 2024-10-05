@@ -1,50 +1,57 @@
 package paytm
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+
 	"go.uber.org/zap"
 )
 
-type LoginResponse struct {
-	Token string `json:"token"`
-}
-
-func (c *PaytmMoneyClient) Login(stateKey string) (map[string]interface{}, error) {
+func (c *PaytmMoneyClient) Login(stateKey string) (string, error) {
 	c.Logger.Info("Logging in to Paytm Money")
 
-	// Construct the login URL
 	loginURL := fmt.Sprintf("https://login.paytmmoney.com/merchant-login?apiKey=%s&state=%s", c.ApiKey, stateKey)
 
-	// Create a new request
-	req, err := http.NewRequest("GET", loginURL, nil)
+	return loginURL, nil
+}
+
+func (c *PaytmMoneyClient) GenerateAccessToken(requestToken string) (*http.Response, error) {
+	c.Logger.Info("GenerateAccessToken in to Paytm Money")
+
+	accessTokenURL := "https://developer.paytmmoney.com/accounts/v2/gettoken"
+
+	type requestBodyStruct struct {
+		ApiKey       string `json:"api_key"`
+		ApiSecretKey string `json:"api_secret_key"`
+		RequestToken string `json:"request_token"`
+	}
+
+	requestBodyJSON := requestBodyStruct{
+		ApiKey:       c.ApiKey,
+		ApiSecretKey: c.SecretKey,
+		RequestToken: requestToken,
+	}
+
+	requestBodyJSONStr, err := json.Marshal(requestBodyJSON)
 	if err != nil {
-		c.Logger.Error("Error creating login request", zap.Error(err))
+		c.Logger.Error("Failed to marshal request body to JSON", zap.Error(err))
 		return nil, err
 	}
 
-	// Make the HTTP request
-	resp, err := c.HTTPClient.Do(req)
+	req, err := http.NewRequest("POST", accessTokenURL, bytes.NewBuffer(requestBodyJSONStr))
 	if err != nil {
-		c.Logger.Error("Error making login request", zap.Error(err))
+		c.Logger.Error("Failed to create request for access token", zap.Error(err))
 		return nil, err
 	}
-	defer resp.Body.Close()
+	req.Header.Set("Content-Type", "application/json")
 
-	// Check for a successful response
-	if resp.StatusCode != http.StatusOK {
-		c.Logger.Error("Failed to login", zap.String("status", resp.Status))
-		return nil, fmt.Errorf("failed to login: %s", resp.Status)
-	}
-
-	// Decode the response body
-	var loginResponse map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&loginResponse); err != nil {
-		c.Logger.Error("Error decoding login response", zap.Error(err))
+	response, err := c.HTTPClient.Do(req)
+	if err != nil {
+		c.Logger.Error("Failed to generate access token", zap.Error(err))
 		return nil, err
 	}
 
-	c.Logger.Info("Login successful", zap.Any("response", loginResponse))
-	return loginResponse, nil
+	return response, nil
 }
