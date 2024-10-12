@@ -9,10 +9,6 @@ import (
 
 type Config struct {
 	Port string
-	PaytmApiKey       string
-	PaytmSecretKey    string
-	PaytmApiBaseUrl   string
-	PaytmLoginBaseUrl string
 }
 
 func LoadConfig() *Config {
@@ -22,10 +18,6 @@ func LoadConfig() *Config {
 
 	config := &Config{
 		Port: getEnv("PORT", "8080"),
-		PaytmApiKey:       getEnv("PAYTM_API_KEY", ""),
-		PaytmSecretKey:    getEnv("PAYTM_CLIENT_SECRET", ""),
-		PaytmApiBaseUrl:   getEnv("PAYTM_API_BASE_URL", ""),
-		PaytmLoginBaseUrl: getEnv("PAYTM_LOGIN_BASE_URL", ""), // Default value
 	}
 
 	return config

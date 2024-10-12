@@ -5,6 +5,7 @@ import (
 
 	"github.com/sandeep-jaiswar/jaiswar-securities/internal/config"
 	"github.com/sandeep-jaiswar/jaiswar-securities/internal/server"
+	"github.com/sandeep-jaiswar/jaiswar-securities/internal/session"
 	"github.com/sandeep-jaiswar/jaiswar-securities/pkg"
 	"go.uber.org/zap"
 )
@@ -23,7 +24,8 @@ func main() {
 		logger.Fatal("Application encountered an error", zap.Error(err))
 	}
 
-	srv := server.NewServer(logger, appConfig.Port)
+	sessionClient := session.NewSessionManager()
+	srv := server.NewServer(logger, appConfig.Port, sessionClient)
 	srv.Start()
 }
 

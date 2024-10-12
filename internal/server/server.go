@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"go.uber.org/zap"
 	"github.com/sandeep-jaiswar/jaiswar-securities/internal/session"
+	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -19,19 +19,22 @@ type Server struct {
 	handlers       *Handlers
 	sessionManager *session.SessionManager
 	httpServer     *http.Server
+	sessionClient  *session.SessionManager
 }
 
 type Handlers struct {
 	logger         *zap.Logger
 	sessionManager *session.SessionManager
+	sessionClient  *session.SessionManager
 }
 
-func NewServer(logger *zap.Logger, port string) *Server {
+func NewServer(logger *zap.Logger, port string, sessionClient *session.SessionManager) *Server {
 	router := mux.NewRouter()
 	sessionManager := session.NewSessionManager()
 	handlers := &Handlers{
 		logger:         logger,
 		sessionManager: sessionManager,
+		sessionClient:  sessionClient,
 	}
 
 	httpServer := &http.Server{
@@ -45,6 +48,7 @@ func NewServer(logger *zap.Logger, port string) *Server {
 		handlers:       handlers,
 		sessionManager: sessionManager,
 		httpServer:     httpServer,
+		sessionClient:  sessionClient,
 	}
 	s.InitializeRoutes()
 	return s
@@ -53,6 +57,7 @@ func NewServer(logger *zap.Logger, port string) *Server {
 func (s *Server) InitializeRoutes() {
 	s.router.HandleFunc("/api/v1/login", s.handlers.LoginHandler).Methods(http.MethodGet)
 	s.router.HandleFunc("/api/v1/token", s.handlers.TokenHandler).Methods(http.MethodGet)
+	s.router.HandleFunc("/api/v1/profile", s.handlers.ProfileHandler).Methods(http.MethodGet)
 }
 
 func (s *Server) Start() {
@@ -84,16 +89,12 @@ func (s *Server) Shutdown() {
 
 func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Login handler called")
-	fmt.Fprintln(w, "Login endpoint")
 }
 
 func (h *Handlers) TokenHandler(w http.ResponseWriter, r *http.Request) {
-	token := "some_generated_token"
-	userID := "user123"
-
 	h.logger.Info("Token handler called")
-	h.logger.Info("Storing token", zap.String("userID", userID), zap.String("token", token))
-	h.sessionManager.StoreToken(userID, token)
+}
 
-	fmt.Fprintf(w, "Token stored for user %s: %s", userID, token)
+func (h *Handlers) ProfileHandler(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Profile handler called")
 }
